@@ -16,18 +16,21 @@
 #include <SPI.h>
 #include <Metro.h>
 #include <bitset>
+#include "Adafruit_LEDBackpack.h"
 //our includes
 #include "FlexCAN_util.hpp"
 #include <KS6eDashGPIO.hpp>
 #include <neopixel_defs.hpp>
 #include <MCU_status.hpp>
+#include <inverter.hpp>
  
 #define DEBUG true
 
 //timers
 Metro update_pixels_timer = Metro(100,1);
 Metro send_buttons_timer = Metro(100,1);
-
+Metro update_sevensegment_timer = Metro(100,1);
+Metro update_fault_leds = Metro(100,1);
 /**
  * @brief variables, objects, etc. for neopixel handling
  * 
@@ -36,13 +39,17 @@ const int numled = NUMBER_OF_PIXELS;
 byte drawingMemory[numled * 3];         //  3 bytes per LED
 DMAMEM byte displayMemory[numled * 12]; // 12 bytes per LED
 WS2812Serial leds(numled, displayMemory, drawingMemory, NEOPIXELDIN, WS2812_GRB);
+Adafruit_7segment seven_segment = Adafruit_7segment();
 
 //variables for SoC, VCU state, SDC error flags
+MC_voltage_information mc_voltage_info;
+MC_fault_codes mc_fault_codes;
 MCU_status vcu_status;
+int tempdisplay_;
 uint8_t state_of_charge = 0;
-uint8_t vcu_state = 0;
+uint8_t vcu_last_torque = 0;
 uint8_t sdc_error_flags = 0; //TODO define bit arrangement for fault flags
-
+void dash_init();
 void gpio_init();
 uint8_t getButtons();
 void updateSOCNeopixels(int soc);
@@ -52,13 +59,7 @@ void test_socpixels();
 void setup() {
   init_can();
   gpio_init(); 
-  leds.begin();
-  delay(10);
-  for (int i = 0; i < leds.numPixels(); i++)
-    {
-        leds.setPixel(i, BLACK);
-    }
-    leds.show();
+  dash_init();
 }
 
 void loop() {
@@ -71,11 +72,66 @@ void loop() {
     uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
     load_can(ID_DASH_BUTTONS,false,buf);
   }
-
+  if(update_sevensegment_timer.check()){
+    if(tempdisplay_>=1){
+      seven_segment.begin();
+      seven_segment.clear();
+      seven_segment.print(vcu_status.get_max_torque(), DEC);
+      seven_segment.writeDisplay();
+      tempdisplay_--; //this is so dumb
+    }else{
+      seven_segment.begin();
+      seven_segment.clear();
+      seven_segment.print(mc_voltage_info.get_dc_bus_voltage(), DEC);
+      seven_segment.writeDisplay();
+    }
+  }
+  if(update_fault_leds.check()){
+    digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high()));
+    digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high()));
+    digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
+    digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+  }
   //TODO remove for commissioning
   //test_socpixels();
-
 }
+
+
+void colorWipe(int color, int wait_us) {
+  for (int i=0; i < leds.numPixels(); i++) {
+    leds.setPixel(i, color);
+    leds.show();
+    delayMicroseconds(wait_us);
+  }
+}
+void dash_init(){
+  leds.begin();
+  leds.setBrightness(BRIGHTNESS);
+  delay(10);
+  int microsec = 200000 / leds.numPixels();
+    colorWipe(RED, microsec);
+    colorWipe(ORANGE, microsec);
+    colorWipe(YELLOW, microsec);
+    colorWipe(GREEN, microsec);
+    colorWipe(BLUE, microsec);
+    colorWipe(0x8F00FF,microsec);
+    colorWipe(PINK, microsec);
+    colorWipe(0xFFFFFF, microsec);
+    colorWipe(GREEN, microsec);
+  for (int i = 0; i < leds.numPixels(); i++)
+  {
+    leds.setPixel(i, BLACK);
+  }
+  leds.show();
+  if(!seven_segment.begin()){
+    Serial.println("L dash");
+  }
+  seven_segment.setBrightness(15);
+  seven_segment.print("COPE");
+  seven_segment.writeDisplay();
+};
+
+
 
 /**
  * @brief 

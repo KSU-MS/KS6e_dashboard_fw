@@ -1,7 +1,12 @@
 #include "FlexCAN_util.hpp"
 #include <MCU_status.hpp>
+#include <inverter.hpp>
+extern MC_voltage_information mc_voltage_info;
+extern MC_fault_codes mc_fault_codes;
 extern MCU_status vcu_status;
 extern uint8_t state_of_charge;
+extern uint8_t vcu_last_torque;
+extern int tempdisplay_;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
 
 
@@ -62,6 +67,20 @@ void update_can(){
         case (ID_VCU_STATUS):
         {
             vcu_status.load(rx_msg.buf);
+            if(vcu_last_torque!= vcu_status.get_max_torque()){
+                vcu_last_torque=vcu_status.get_max_torque();
+                tempdisplay_ = 10;
+            }
+            break;
+        }
+        case (ID_MC_VOLTAGE_INFORMATION):
+        {
+            mc_voltage_info.load(rx_msg.buf);
+            break;
+        }
+        case (ID_MC_FAULT_CODES):
+        {
+            mc_fault_codes.load(rx_msg.buf);
             break;
         }
         default:
