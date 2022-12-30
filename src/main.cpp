@@ -1,0 +1,209 @@
+/**
+ * @file main.cpp
+ * @author mathewos samson (matty b)
+ * @brief main code for ks6e dash
+ * @version 0.1
+ * @date 2022-12-29
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
+//lib includes
+#include <Arduino.h>
+#include <WS2812Serial.h>
+#include "FlexCAN_T4.h"
+#include <Wire.h>
+#include <SPI.h>
+#include <Metro.h>
+#include <bitset>
+//our includes
+#include "FlexCAN_util.hpp"
+#include <KS6eDashGPIO.hpp>
+#include <neopixel_defs.hpp>
+#include <MCU_status.hpp>
+ 
+#define DEBUG true
+
+//timers
+Metro update_pixels_timer = Metro(100,1);
+Metro send_buttons_timer = Metro(100,1);
+
+/**
+ * @brief variables, objects, etc. for neopixel handling
+ * 
+ */
+const int numled = NUMBER_OF_PIXELS;
+byte drawingMemory[numled * 3];         //  3 bytes per LED
+DMAMEM byte displayMemory[numled * 12]; // 12 bytes per LED
+WS2812Serial leds(numled, displayMemory, drawingMemory, NEOPIXELDIN, WS2812_GRB);
+
+//variables for SoC, VCU state, SDC error flags
+MCU_status vcu_status;
+uint8_t state_of_charge = 0;
+uint8_t vcu_state = 0;
+uint8_t sdc_error_flags = 0; //TODO define bit arrangement for fault flags
+
+void gpio_init();
+uint8_t getButtons();
+void updateSOCNeopixels(int soc);
+void updateStatusNeopixels(MCU_status MCU_status);
+void test_socpixels();
+
+void setup() {
+  init_can();
+  gpio_init(); 
+  leds.begin();
+  delay(10);
+  for (int i = 0; i < leds.numPixels(); i++)
+    {
+        leds.setPixel(i, BLACK);
+    }
+    leds.show();
+}
+
+void loop() {
+  if(update_pixels_timer.check()){
+    updateSOCNeopixels(state_of_charge);
+    updateStatusNeopixels(vcu_status);
+    leds.show();
+  }
+  if(send_buttons_timer.check()){
+    uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
+    load_can(ID_DASH_BUTTONS,false,buf);
+  }
+
+  //TODO remove for commissioning
+  //test_socpixels();
+
+}
+
+/**
+ * @brief 
+ * 
+ */
+void gpio_init(){
+  //initial button pins as inputs
+  for (int i=0; i<6;i++){
+    pinMode(dashButtons[i],INPUT_PULLUP);
+  }
+  //initialize LED driver pins as outputs
+  for (int i=0; i<5;i++){
+    pinMode(seven_seg_gpios[i],OUTPUT);
+  }
+  for (int i=0; i<3;i++){
+    pinMode(misc_led_gpios[i],OUTPUT);
+  }
+  #if DEBUG
+  Serial.println("GPIOs initialized");
+  #endif
+}
+/**
+ * @brief Get the Buttons object
+ * 
+ * @return uint8_t 
+ */
+uint8_t getButtons(){
+  uint8_t buttonStatuses=0;
+  for (int i=0; i<6;i++){
+    buttonStatuses |= (digitalRead(dashButtons[i]) << i);
+  }
+  #if DEBUG
+  Serial.print("Button Stats: ");
+  Serial.println(buttonStatuses,BIN);
+  #endif
+  return buttonStatuses;
+}
+/**
+ * @brief 
+ * 
+ * @param soc 
+ */
+void updateSOCNeopixels(int soc){
+  if(soc > 100){soc=100;}else if(soc<0){soc=0;}
+  float soc_f = soc;
+  soc_f /= 100;
+  int num_leds_enabled = PIXELS_FOR_SOC * soc_f;
+  int num_leds_leftover = PIXELS_FOR_SOC-num_leds_enabled;
+  for (int i=0;i<num_leds_enabled;i++){
+    leds.setPixel(i,GREEN);
+  }
+  for (int i=(PIXELS_FOR_SOC-1); i>=num_leds_enabled;i--){
+    leds.setPixel(i,0x0f'00'00);
+  }
+  int soc_mod = soc % 10;
+  if(num_leds_enabled<PIXELS_FOR_SOC && soc_mod > 0){
+    float soc_percent_mod = soc_mod;
+    soc_percent_mod /= 10;
+    uint8_t soc_green = 128*soc_percent_mod;
+    uint8_t soc_red = 255-soc_green;
+    // first byte is red, second is green, third is blue
+    uint32_t soc_percentage_color = (soc_red << 16) | (soc_green << 8);
+    leds.setPixel(num_leds_enabled,soc_percentage_color);
+  }
+  #if DEBUG
+  Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
+  #endif
+}
+/**
+ * @brief 
+ * 
+ * @param mcu_status 
+ */
+void updateStatusNeopixels(MCU_status mcu_status){
+  uint32_t status_color=BLACK;
+  switch (mcu_status.get_state()){
+    case MCU_STATE::STARTUP:
+    {
+      status_color=WHITE;
+      break;
+    }
+    case MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE:
+    {
+      status_color=GREEN;
+      break;
+    }
+    case MCU_STATE::TRACTIVE_SYSTEM_ACTIVE:
+    {
+      status_color = RED;
+      break;
+    }
+    case MCU_STATE::ENABLING_INVERTER:
+    {
+      status_color = YELLOW;
+      break;
+    }
+    case MCU_STATE::WAITING_READY_TO_DRIVE_SOUND:
+    {
+      status_color=ORANGE;
+      break;
+    }
+    case MCU_STATE::READY_TO_DRIVE:
+    {
+      status_color=PINK;
+      break;
+    }
+  }
+  for(int i=PIXELS_FOR_SOC;i<NUMBER_OF_PIXELS;i++){
+    leds.setPixel(i,status_color);
+  }
+}
+/**
+ * @brief 
+ * 
+ */
+void test_socpixels(){
+  Serial.println("Starting count up");
+  for(int i=0; i<=100; i++){
+    updateSOCNeopixels(i);
+    leds.show();
+    Serial.println(i);
+    delay(100);
+ }
+  Serial.println("Starting count down");
+  for(int i=100; i>=0; i--){
+    updateSOCNeopixels(i);
+    leds.show();
+    Serial.println(i);
+    delay(100);
+  }
+}
