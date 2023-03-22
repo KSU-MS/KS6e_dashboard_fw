@@ -68,10 +68,15 @@ void loop() {
     updateStatusNeopixels(vcu_status);
     leds.show();
   }
-  if(send_buttons_timer.check()){
+  // if(send_buttons_timer.check()){
+  //   uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
+  //   load_can(ID_DASH_BUTTONS,false,buf);
+  // }
+    if(send_buttons_timer.check()){
     uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
     load_can(ID_DASH_BUTTONS,false,buf);
   }
+
   if(update_sevensegment_timer.check()){
     if(tempdisplay_>=1){
       seven_segment.begin();
@@ -196,9 +201,9 @@ void updateSOCNeopixels(int soc){
     uint32_t soc_percentage_color = (soc_red << 16) | (soc_green << 8);
     leds.setPixel(num_leds_enabled,soc_percentage_color);
   }
-  #if DEBUG
-  Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
-  #endif
+  // #if DEBUG
+  // Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
+  // #endif
 }
 /**
  * @brief 

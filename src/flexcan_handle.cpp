@@ -7,7 +7,7 @@ extern MCU_status vcu_status;
 extern uint8_t state_of_charge;
 extern uint8_t vcu_last_torque;
 extern int tempdisplay_;
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
 
 
 void init_can(){
@@ -49,6 +49,7 @@ int load_can(uint32_t id, bool extended, uint8_t buf[]){
     tx_msg.flags.extended = extended;
     memcpy(&tx_msg.buf[0],&buf,sizeof(buf));
     return WriteCAN(tx_msg);
+    Serial.println("hello"); //todo
 }
 /**
  * @brief 
