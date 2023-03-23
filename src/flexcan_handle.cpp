@@ -44,12 +44,23 @@ return Inverter_CAN_.write(msg);
  * @return int 
  */
 int load_can(uint32_t id, bool extended, uint8_t buf[]){
-    CAN_message_t tx_msg;
-    tx_msg.id = id;
-    tx_msg.flags.extended = extended;
-    memcpy(&tx_msg.buf[0],&buf,sizeof(buf));
-    return WriteCAN(tx_msg);
-    Serial.println("hello"); //todo
+    
+    CAN_message_t statusMsg;
+    statusMsg.len = 8;
+    statusMsg.id = 0xEB;
+    // Serial.println("can message???");
+    uint8_t statusPacket[] = {buf[0],0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+    memcpy(statusMsg.buf, statusPacket, sizeof(statusMsg.buf));
+    Inverter_CAN_.write(statusMsg);
+    
+    
+    // CAN_message_t tx_msg;
+    // tx_msg.id = id;
+    // tx_msg.flags.extended = extended;
+    // memcpy(&tx_msg.buf[0],&buf,sizeof(buf));
+    // Serial.println("hello"); //todo
+    // return WriteCAN(tx_msg);
+    
 }
 /**
  * @brief 

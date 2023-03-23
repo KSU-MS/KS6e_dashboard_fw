@@ -63,6 +63,8 @@ void setup() {
 }
 
 void loop() {
+  update_can();
+
   if(update_pixels_timer.check()){
     updateSOCNeopixels(state_of_charge);
     updateStatusNeopixels(vcu_status);
@@ -93,10 +95,18 @@ void loop() {
   }
   if(update_fault_leds.check()){
     digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high()));
+    Serial.printf("This is the BMS OK HIGH boolean: %d\n",vcu_status.get_bms_ok_high());
+
     digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high()));
+    Serial.printf("This is the BSPD OK HIGH boolean: %d\n",vcu_status.get_bspd_ok_high());
+
     digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
+    Serial.printf("This is the IMD OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
+
     digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
   }
+
+
   //TODO remove for commissioning
   //test_socpixels();
 }
