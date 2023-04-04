@@ -7,7 +7,7 @@ extern MCU_status vcu_status;
 extern uint8_t state_of_charge;
 extern uint8_t vcu_last_torque;
 extern int tempdisplay_;
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
 
 
 void init_can(){
@@ -44,11 +44,23 @@ return Inverter_CAN_.write(msg);
  * @return int 
  */
 int load_can(uint32_t id, bool extended, uint8_t buf[]){
-    CAN_message_t tx_msg;
-    tx_msg.id = id;
-    tx_msg.flags.extended = extended;
-    memcpy(&tx_msg.buf[0],&buf,sizeof(buf));
-    return WriteCAN(tx_msg);
+    
+    CAN_message_t statusMsg;
+    statusMsg.len = 8;
+    statusMsg.id = 0xEB;
+    // Serial.println("can message???");
+    uint8_t statusPacket[] = {buf[0],0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+    memcpy(statusMsg.buf, statusPacket, sizeof(statusMsg.buf));
+    Inverter_CAN_.write(statusMsg);
+    
+    
+    // CAN_message_t tx_msg;
+    // tx_msg.id = id;
+    // tx_msg.flags.extended = extended;
+    // memcpy(&tx_msg.buf[0],&buf,sizeof(buf));
+    // Serial.println("hello"); //todo
+    // return WriteCAN(tx_msg);
+    
 }
 /**
  * @brief 

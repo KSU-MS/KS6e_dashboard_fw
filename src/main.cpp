@@ -63,15 +63,22 @@ void setup() {
 }
 
 void loop() {
+  update_can();
+
   if(update_pixels_timer.check()){
     updateSOCNeopixels(state_of_charge);
     updateStatusNeopixels(vcu_status);
     leds.show();
   }
-  if(send_buttons_timer.check()){
+  // if(send_buttons_timer.check()){
+  //   uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
+  //   load_can(ID_DASH_BUTTONS,false,buf);
+  // }
+    if(send_buttons_timer.check()){
     uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
     load_can(ID_DASH_BUTTONS,false,buf);
   }
+
   if(update_sevensegment_timer.check()){
     if(tempdisplay_>=1){
       seven_segment.begin();
@@ -87,11 +94,19 @@ void loop() {
     }
   }
   if(update_fault_leds.check()){
-    digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high()));
+    digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high())); // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
+    Serial.printf("This is the BMS OK HIGH boolean: %d\n",vcu_status.get_bms_ok_high());
+
     digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high()));
+    Serial.printf("This is the BSPD OK HIGH boolean: %d\n",vcu_status.get_bspd_ok_high());
+
     digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
+    Serial.printf("This is the IMD OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
+
     digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
   }
+
+
   //TODO remove for commissioning
   //test_socpixels();
 }
@@ -196,9 +211,9 @@ void updateSOCNeopixels(int soc){
     uint32_t soc_percentage_color = (soc_red << 16) | (soc_green << 8);
     leds.setPixel(num_leds_enabled,soc_percentage_color);
   }
-  #if DEBUG
-  Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
-  #endif
+  // #if DEBUG
+  // Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
+  // #endif
 }
 /**
  * @brief 

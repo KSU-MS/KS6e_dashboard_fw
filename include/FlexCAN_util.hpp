@@ -8,5 +8,6 @@ int WriteCAN(CAN_message_t &msg);
 int ReadCAN(CAN_message_t &msg);
 int load_can(uint32_t id, bool extended, uint8_t buf[8]);
 void init_can();
+void update_can();
 
 #endif
