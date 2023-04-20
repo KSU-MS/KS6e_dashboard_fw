@@ -51,7 +51,7 @@ int load_can(uint32_t id, bool extended, uint8_t buf[]){
     // Serial.println("can message???");
     uint8_t statusPacket[] = {buf[0],0x00,0x00,0x00,0x00,0x00,0x00,0x00};
     memcpy(statusMsg.buf, statusPacket, sizeof(statusMsg.buf));
-    Inverter_CAN_.write(statusMsg);
+    return Inverter_CAN_.write(statusMsg);
     
     
     // CAN_message_t tx_msg;
