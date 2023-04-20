@@ -141,7 +141,7 @@ void dash_init()
     }
     leds.show();
     seven_segment.begin(0x70);
-    seven_segment.setBrightness(128);
+    seven_segment.setBrightness(15);
 };
 
 /**
