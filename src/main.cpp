@@ -122,6 +122,7 @@ void colorWipe(int color, int wait_us)
 }
 void dash_init()
 {
+    // Neopixel code?
     leds.begin();
     leds.setBrightness(BRIGHTNESS);
     delay(10);
@@ -140,6 +141,8 @@ void dash_init()
         leds.setPixel(i, BLACK);
     }
     leds.show();
+
+    // Seven segment code
     seven_segment.begin(0x70);
     seven_segment.setBrightness(15);
 };
