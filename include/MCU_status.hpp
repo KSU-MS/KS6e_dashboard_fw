@@ -99,7 +99,10 @@ public:
     inline void set_torque_mode(const uint8_t mode) { torque_mode = mode; }
 
     /* VCU to Dash */
-    uint8_t *getBusVoltage();
+    void getBusVoltage();
+
+    // Bus Voltage
+    uint8_t BusVolt_ByteEachDigit[8] = { 0 };
 
 private:
     // no free bits
@@ -159,8 +162,7 @@ private:
     // @Parse @Unit(m) @Scale(100)
     uint16_t distance_travelled;
 
-    // Bus Voltage
-    uint8_t BusVolt_ByteEachDigit[8] = { 0 };
+    
 
 };
 
