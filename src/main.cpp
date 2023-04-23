@@ -94,7 +94,6 @@ void loop()
             seven_segment.writeDigitNum(i, vcu_status.getBusVoltage()[i]);
             seven_segment.writeDisplay();
         }
-        Serial.println("");
     }
     if (update_fault_leds.check())
     {
