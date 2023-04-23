@@ -3,9 +3,6 @@
 #include "FlexCAN_util.hpp"
 
 
-
-
-
 void MCU_status::BusVoltage()
 {
     CAN_message_t VCU_msg;
@@ -16,6 +13,7 @@ void MCU_status::BusVoltage()
     {
         memcpy(VCU_msg.buf, this->BusVolt_ByteEachDigit, VCU_msg.len);
     }
+    else return;
 }
 
 

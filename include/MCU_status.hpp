@@ -51,7 +51,6 @@ public:
     inline void set_shutdown_e_above_threshold(const bool above) { shutdown_states = (shutdown_states & 0x7F) | (above << 7); }
 
     /* Pedal system monitoring */
-
     inline uint8_t get_pedal_states() const { return pedal_states; }
     inline bool get_no_accel_implausability() const { return pedal_states & 0x04; }
     inline bool get_no_brake_implausability() const { return pedal_states & 0x08; }
@@ -69,7 +68,6 @@ public:
     inline void set_no_accel_brake_implausability(const bool implausable) { pedal_states = (pedal_states & 0x7F) | (implausable << 7); }
 
     /* ECU state */
-
     inline uint8_t get_ecu_states() const { return (ecu_states); }
     inline MCU_STATE get_state() const { return static_cast<MCU_STATE>((ecu_states & 0x07)); }
     inline bool get_inverter_powered() const { return (ecu_states & 0x08); }
