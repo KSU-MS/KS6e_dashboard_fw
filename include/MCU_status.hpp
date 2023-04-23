@@ -97,7 +97,7 @@ public:
     inline void set_torque_mode(const uint8_t mode) { torque_mode = mode; }
 
     /* VCU to Dash */
-    void BusVoltage();
+    void updateBusVoltage();
     uint8_t *getBusVoltage();
 
 private:

@@ -3,7 +3,7 @@
 #include "FlexCAN_util.hpp"
 
 
-void MCU_status::BusVoltage()
+void MCU_status::updateBusVoltage()
 {
     CAN_message_t VCU_msg;
 

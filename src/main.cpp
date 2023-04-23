@@ -67,8 +67,6 @@ void loop()
 {
     update_can();
 
-    vcu_status.BusVoltage();
-
     if (update_pixels_timer.check())
     {
         updateSOCNeopixels(state_of_charge);
@@ -87,9 +85,11 @@ void loop()
 
     if (update_sevensegment_timer.check())
     {
+        vcu_status.updateBusVoltage();
+
         seven_segment.clear();
 
-        for (int i = 0; i < sizeof(vcu_status.getBusVoltage()) - 4; i++)
+        for (int i = 0; i < 4; i++)
         {
             seven_segment.writeDigitNum(i, vcu_status.getBusVoltage()[i]);
             seven_segment.writeDisplay();
