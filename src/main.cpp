@@ -89,22 +89,24 @@ void loop()
     {
         seven_segment.clear();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < sizeof(vcu_status.getBusVoltage()) - 4; i++)
         {
             seven_segment.writeDigitNum(i, vcu_status.getBusVoltage()[i]);
             seven_segment.writeDisplay();
         }
+        Serial.println("");
     }
     if (update_fault_leds.check())
     {
         digitalWrite(AMS_LED, !(vcu_status.get_bms_ok_high())); // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
-        Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
-
         digitalWrite(BSPD_LED, !(vcu_status.get_bspd_ok_high()));
-        Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
-
         digitalWrite(IMD_LED, !(vcu_status.get_imd_ok_high()));
-        Serial.printf("This is the IMD OK HIGH boolean: %d\n", vcu_status.get_imd_ok_high());
+        
+        #ifdef DEBUG
+        // Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
+        // Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
+        // Serial.printf("This is the IMD OK HIGH boolean: %d\n", vcu_status.get_imd_ok_high());
+        #endif
 
         digitalWrite(INVERTER_LED, (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
     }
@@ -124,6 +126,7 @@ void colorWipe(int color, int wait_us)
 }
 void dash_init()
 {
+    // Neopixel code?
     leds.begin();
     leds.setBrightness(BRIGHTNESS);
     delay(10);
@@ -142,8 +145,10 @@ void dash_init()
         leds.setPixel(i, BLACK);
     }
     leds.show();
+
+    // Seven segment code
     seven_segment.begin(0x70);
-    seven_segment.setBrightness(128);
+    seven_segment.setBrightness(15);
 };
 
 /**
@@ -183,8 +188,8 @@ uint8_t getButtons()
         buttonStatuses |= (digitalRead(dashButtons[i]) << i);
     }
 #if DEBUG
-    Serial.print("Button Stats: ");
-    Serial.println(buttonStatuses, BIN);
+    // Serial.print("Button Stats: ");
+    // Serial.println(buttonStatuses, BIN);
 #endif
     return buttonStatuses;
 }

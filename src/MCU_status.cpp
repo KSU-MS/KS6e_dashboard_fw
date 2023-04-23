@@ -21,5 +21,5 @@ void MCU_status::BusVoltage()
 
 uint8_t *MCU_status::getBusVoltage()
 {
-    return BusVolt_ByteEachDigit;
+    return this->BusVolt_ByteEachDigit;
 }

@@ -100,7 +100,6 @@ public:
 
     /* VCU to Dash */
     void BusVoltage();
-
     uint8_t *getBusVoltage();
 
 private:
