@@ -95,6 +95,7 @@ void loop()
             seven_segment.writeDisplay();
         }
     }
+    
     if (update_fault_leds.check())
     {
         digitalWrite(AMS_LED, !(vcu_status.get_bms_ok_high())); // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
