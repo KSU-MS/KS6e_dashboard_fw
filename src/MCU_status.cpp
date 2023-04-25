@@ -11,9 +11,8 @@ void MCU_status::updateBusVoltage()
 
     if (VCU_msg.id == ID_DASH_BUSVOLT)
     {
-        memcpy(VCU_msg.buf, this->BusVolt_ByteEachDigit, VCU_msg.len);
+        memcpy(this->BusVolt_ByteEachDigit, VCU_msg.buf, VCU_msg.len);
     }
-    else return;
 }
 
 
@@ -21,3 +20,4 @@ uint8_t *MCU_status::getBusVoltage()
 {
     return this->BusVolt_ByteEachDigit;
 }
+
