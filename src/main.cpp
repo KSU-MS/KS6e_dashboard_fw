@@ -25,6 +25,7 @@
 #include <inverter.hpp>
  
 #define DEBUG true
+#define RELIABLE true // Define this TRUE if the code has been successfully tested & pushed to MAIN branch
 
 //timers
 Metro update_pixels_timer = Metro(100,1);
@@ -75,7 +76,7 @@ void loop() {
   //   load_can(ID_DASH_BUTTONS,false,buf);
   // }
     if(send_buttons_timer.check()){
-    uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
+    uint8_t buf[]={getButtons(),0,0,0,0,0,0,0}; // TODO reduce the size of this? since it returns 6 rn and that would be more than 8
     load_can(ID_DASH_BUTTONS,false,buf);
   }
 
@@ -97,13 +98,14 @@ void loop() {
     digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high())); // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
     Serial.printf("This is the BMS OK HIGH boolean: %d\n",vcu_status.get_bms_ok_high());
 
-    digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high()));
+    digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high() && RELIABLE)); // May highjack this for now and make it the testing code light
     Serial.printf("This is the BSPD OK HIGH boolean: %d\n",vcu_status.get_bspd_ok_high());
 
     digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
     Serial.printf("This is the IMD OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
 
-    digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+    digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() || mc_fault_codes.get_post_fault_lo() || mc_fault_codes.get_run_fault_hi() || mc_fault_codes.get_run_fault_lo()));
+    Serial.printf("This is the INVERTER OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
   }
 
 
