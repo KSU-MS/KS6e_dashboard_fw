@@ -12,11 +12,11 @@
 #include <Arduino.h>
 #include <WS2812Serial.h>
 #include "FlexCAN_T4.h"
-#include <Wire.h>
+// #include <Wire.h>
 #include <SPI.h>
 #include <Metro.h>
 #include <bitset>
-#include "Adafruit_LEDBackpack.h"
+#include "HT16K33.h"
 // our includes
 #include "FlexCAN_util.hpp"
 #include <KS6eDashGPIO.hpp>
@@ -39,7 +39,8 @@ const int numled = NUMBER_OF_PIXELS;
 byte drawingMemory[numled * 3];         //  3 bytes per LED
 DMAMEM byte displayMemory[numled * 12]; // 12 bytes per LED
 WS2812Serial leds(numled, displayMemory, drawingMemory, NEOPIXELDIN, WS2812_GRB);
-Adafruit_7segment seven_segment = Adafruit_7segment();
+
+HT16K33 sevenSegmentMatrix(0x70);
 
 // variables for SoC, VCU state, SDC error flags
 MC_voltage_information mc_voltage_info;
@@ -88,22 +89,7 @@ void loop()
 
     if (update_sevensegment_timer.check())
     {
-        //seven_segment.clear();
-
-        for (int i = 0; i < 8; i++)
-        {
-            Serial.print("Digit ");
-            Serial.print(i + 1);
-            Serial.print(": ");
-            Serial.print(vcu_status.getBusVoltage()[i]);
-            Serial.println();
-        }
-
-        // for (int i = 0; i < 4; i++)
-        // {
-        //     seven_segment.writeDigitNum(i, vcu_status.getBusVoltage()[i]);
-        //     seven_segment.writeDisplay();
-        // }
+        sevenSegmentMatrix.display(vcu_status.getBusVoltage(), 2);
     }
     
     if (update_fault_leds.check())
@@ -156,9 +142,11 @@ void dash_init()
     }
     leds.show();
 
-    // Seven segment code
-    seven_segment.begin(0x70);
-    seven_segment.setBrightness(255);
+    // Seven segment matrix code
+    sevenSegmentMatrix.begin();
+    Wire.setClock(100000);
+    sevenSegmentMatrix.displayOn();
+    sevenSegmentMatrix.setDigits(4);
 };
 
 /**
@@ -230,6 +218,7 @@ void updateSOCNeopixels(int soc)
     {
         leds.setPixel(i, 0x0f'00'00);
     }
+    
     int soc_mod = soc % 10;
     if (num_leds_enabled < PIXELS_FOR_SOC && soc_mod > 0)
     {
