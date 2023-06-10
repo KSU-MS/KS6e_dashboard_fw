@@ -3,8 +3,8 @@
 // GPIO defines
 //indicator lights
 #define INVERTER_LED 0
-#define BSPD_LED 1
-#define AMS_LED 2
+#define BSPD_LED 2
+#define AMS_LED 1
 #define IMD_LED 3
 const int fault_led_gpios[]={INVERTER_LED,BSPD_LED,AMS_LED,IMD_LED};
 //for the single digit seven segment
