@@ -73,7 +73,8 @@ void update_can(){
         {
         case (ID_BMS_SOC):
         {
-            state_of_charge = rx_msg.buf[0];
+            //the BMS multiples the SOC value by two when it sends it, have to divide by two when received
+            state_of_charge = rx_msg.buf[0] / 2;
             break;
         }
         case (ID_VCU_STATUS):

@@ -1,7 +1,7 @@
 #ifndef NEOPIXEL_DEFS_HPP
 #define NEOPIXEL_DEFS_HPP
-#define NUMBER_OF_PIXELS 17
-#define PIXELS_FOR_SOC 10
+#define NUMBER_OF_PIXELS 17 //THere are seventeen total neopixels on the board
+#define PIXELS_FOR_SOC 11 //There are eleven neopixels on the top row intended for SOC
 // neo-pixel specific
 // color values are 0-255 (8 bits)
 // first byte is red, second is green, third is blue
