@@ -55,6 +55,7 @@ uint8_t getButtons();
 void updateSOCNeopixels(int soc);
 void updateStatusNeopixels(MCU_status MCU_status);
 void test_socpixels();
+void set_single_segment_indicator(uint8_t number_to_display);
 
 void setup() {
   init_can();
@@ -277,4 +278,23 @@ void test_socpixels(){
     Serial.println(i);
     delay(100);
   }
+}
+//This method is not currently used because the seven segment on the KS6e
+//Dash doesn't work (because of schematic mistakes)
+//It should be kept here tho
+void set_single_segment_indicator(uint8_t number_to_display){
+  digitalWrite(LATCH_1,HIGH);
+  bool led_a_high = number_to_display && 0b0001;
+  bool led_b_high = number_to_display && 0b0010;
+  bool led_c_high = number_to_display && 0b0100;
+  bool led_d_high = number_to_display && 0b1000;
+  #if DEBUG
+  Serial.printf("SEVEN SEGMENT A: %d B: %d C: %d D: %d");
+  #endif
+  digitalWrite(LED_A,led_a_high);
+  digitalWrite(LED_B,led_b_high);
+  digitalWrite(LED_C,led_c_high);
+  digitalWrite(LED_D,led_d_high);
+  // there may need to be a delay here, but dont want to block
+digitalWrite(LATCH_1,LOW);
 }
