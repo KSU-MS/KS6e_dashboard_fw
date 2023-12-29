@@ -55,6 +55,7 @@ uint8_t getButtons();
 void updateSOCNeopixels(int soc);
 void updateStatusNeopixels(MCU_status MCU_status);
 void test_socpixels();
+void set_single_segment_indicator(uint8_t number_to_display);
 
 void setup() {
   init_can();
@@ -70,10 +71,6 @@ void loop() {
     updateStatusNeopixels(vcu_status);
     leds.show();
   }
-  // if(send_buttons_timer.check()){
-  //   uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
-  //   load_can(ID_DASH_BUTTONS,false,buf);
-  // }
     if(send_buttons_timer.check()){
     uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
     load_can(ID_DASH_BUTTONS,false,buf);
@@ -102,8 +99,9 @@ void loop() {
 
     digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
     Serial.printf("This is the IMD OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
-
+    //For the inverter fault, we OR all the fault fields, since fault code < 0 == bad == turn light on
     digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+    Serial.printf("These are the Inverter Fault Codes: Post_fault_hi: %d Post_fault_lo: %d Run_fault_hi: %d Run_fault_lo: %d\n",mc_fault_codes.get_post_fault_hi(),mc_fault_codes.get_post_fault_lo(),mc_fault_codes.get_run_fault_hi(),mc_fault_codes.get_run_fault_lo());
   }
 
 
@@ -190,6 +188,9 @@ uint8_t getButtons(){
  * @param soc 
  */
 void updateSOCNeopixels(int soc){
+  #if DEBUG
+  Serial.printf("State of charge value in neopixel update method: %d\n",soc);
+  #endif
   if(soc > 100){soc=100;}else if(soc<0){soc=0;}
   float soc_f = soc;
   soc_f /= 100;
@@ -225,7 +226,7 @@ void updateStatusNeopixels(MCU_status mcu_status){
   switch (mcu_status.get_state()){
     case MCU_STATE::STARTUP:
     {
-      status_color=WHITE;
+      status_color=BLUE;
       break;
     }
     case MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE:
@@ -277,4 +278,23 @@ void test_socpixels(){
     Serial.println(i);
     delay(100);
   }
+}
+//This method is not currently used because the seven segment on the KS6e
+//Dash doesn't work (because of schematic mistakes)
+//It should be kept here tho
+void set_single_segment_indicator(uint8_t number_to_display){
+  digitalWrite(LATCH_1,HIGH);
+  bool led_a_high = number_to_display && 0b0001;
+  bool led_b_high = number_to_display && 0b0010;
+  bool led_c_high = number_to_display && 0b0100;
+  bool led_d_high = number_to_display && 0b1000;
+  #if DEBUG
+  Serial.printf("SEVEN SEGMENT A: %d B: %d C: %d D: %d");
+  #endif
+  digitalWrite(LED_A,led_a_high);
+  digitalWrite(LED_B,led_b_high);
+  digitalWrite(LED_C,led_c_high);
+  digitalWrite(LED_D,led_d_high);
+  // there may need to be a delay here, but dont want to block
+digitalWrite(LATCH_1,LOW);
 }

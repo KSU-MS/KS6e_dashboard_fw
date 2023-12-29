@@ -11,7 +11,7 @@ const int fault_led_gpios[]={INVERTER_LED,BSPD_LED,AMS_LED,IMD_LED};
 #define LED_A 4
 #define LED_B 5
 #define LED_C 6
-#define LED_D 6
+#define LED_D 7
 #define LATCH_1 9
 const int seven_seg_gpios[]={LED_A,LED_B,LED_C,LED_D,LATCH_1};
 
