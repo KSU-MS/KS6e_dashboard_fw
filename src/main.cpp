@@ -23,6 +23,7 @@
 #include <neopixel_defs.hpp>
 #include <MCU_status.hpp>
 #include <inverter.hpp>
+#include <device_status.hpp>
 
 #define DEBUG false
 
@@ -31,6 +32,7 @@ Metro update_pixels_timer = Metro(100, 1);
 Metro send_buttons_timer = Metro(100, 1);
 Metro update_sevensegment_timer = Metro(100, 1);
 Metro update_fault_leds = Metro(100, 1);
+Metro send_dash_status_timer = Metro(1000, 1);
 /**
  * @brief variables, objects, etc. for neopixel handling
  *
@@ -57,6 +59,9 @@ void updateStatusNeopixels(MCU_status MCU_status);
 void test_socpixels();
 void set_single_segment_indicator(uint8_t number_to_display);
 
+static CAN_message_t fw_hash_msg;
+device_status_t dash_status_t;
+
 void setup()
 {
   init_can();
@@ -64,6 +69,12 @@ void setup()
   display_enabled = dash_init();
   vcu_status.set_state(MCU_STATE::STARTUP);
   state_of_charge = 0;
+
+  fw_hash_msg.id = ID_DASH_FW_VERSION;
+  fw_hash_msg.len = 8;
+  dash_status_t.on_time_seconds = (millis() / 1000);
+  memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
+  WriteCAN(fw_hash_msg);
 #if DEBUG
   Serial.println("Startup complete");
 #endif
@@ -88,29 +99,30 @@ void loop()
     WriteCAN(button_status_msg);
   }
 
+
+  if (send_dash_status_timer.check())
+  {
+    dash_status_t.on_time_seconds = (millis() / 1000);
+    memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
+    WriteCAN(fw_hash_msg);
+  }
   if (update_sevensegment_timer.check())
   {
     set_single_segment_indicator(vcu_status.get_torque_mode());
-    if (tempdisplay_ >= 1)
+    if (display_enabled | seven_segment.begin())
     {
-      if (display_enabled)
+      seven_segment.begin();
+      seven_segment.clear();
+      if (tempdisplay_ >= 1)
       {
-        seven_segment.begin();
-        seven_segment.clear();
         seven_segment.print(vcu_status.get_max_torque(), DEC);
-        seven_segment.writeDisplay();
         tempdisplay_--; // this is so dumb
       }
-    }
-    else
-    {
-      if (display_enabled)
+      else
       {
-        seven_segment.begin();
-        seven_segment.clear();
         seven_segment.print(mc_voltage_info.get_dc_bus_voltage(), DEC);
-        seven_segment.writeDisplay();
       }
+      seven_segment.writeDisplay();
     }
   }
   if (update_fault_leds.check())
@@ -121,7 +133,7 @@ void loop()
     digitalWrite(BSPD_LED, !(vcu_status.get_bspd_ok_high()));
 
     digitalWrite(IMD_LED, !(vcu_status.get_imd_ok_high()));
-    // For the inverter fault, we OR all the fault fields, since fault code < 0 == bad == turn light on
+    // For the inverter fault, we just OR all the fault fields, since fault code > 0 == bad == turn light on
     digitalWrite(INVERTER_LED, (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
 #if DEBUG
     Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
