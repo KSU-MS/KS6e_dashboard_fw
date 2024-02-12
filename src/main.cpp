@@ -25,7 +25,7 @@
 #include <inverter.hpp>
 #include <device_status.hpp>
 
-#define DEBUG false
+#define DEBUG true
 
 // timers
 Metro update_pixels_timer = Metro(100, 1);
@@ -104,6 +104,9 @@ void loop()
   {
     dash_status_t.on_time_seconds = (millis() / 1000);
     memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
+#if DEBUG
+    Serial.printf("dash status hash: %x time: %d dirty: %d main: %d\n",dash_status_t.firmware_version,dash_status_t.on_time_seconds,dash_status_t.project_is_dirty,dash_status_t.project_on_main_or_master);
+#endif
     WriteCAN(fw_hash_msg);
   }
   if (update_sevensegment_timer.check())
