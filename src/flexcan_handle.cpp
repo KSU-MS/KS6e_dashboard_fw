@@ -32,7 +32,6 @@ return Inverter_CAN_.read(msg);
 
 int WriteCAN(CAN_message_t &msg)
 {
-Inverter_CAN_.write(msg);
 return Inverter_CAN_.write(msg);
 }
 /**

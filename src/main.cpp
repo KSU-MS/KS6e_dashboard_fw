@@ -96,6 +96,10 @@ void loop()
     button_status_msg.id = ID_DASH_BUTTONS;
     button_status_msg.len = 1;
     button_status_msg.buf[0] = getButtons();
+#if DEBUG
+    Serial.println("Sent off buttons");
+    Serial.printf("Time: %d\n",millis());
+#endif
     WriteCAN(button_status_msg);
   }
 
