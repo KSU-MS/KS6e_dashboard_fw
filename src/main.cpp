@@ -61,7 +61,7 @@ void set_single_segment_indicator(uint8_t number_to_display);
 
 static CAN_message_t fw_hash_msg;
 device_status_t dash_status_t;
-
+const uint8_t fault_led_duty = 0x0F;
 void setup()
 {
   init_can();
@@ -142,6 +142,10 @@ void loop()
     digitalWrite(IMD_LED, !(vcu_status.get_imd_ok_high()));
     // For the inverter fault, we just OR all the fault fields, since fault code > 0 == bad == turn light on
     digitalWrite(INVERTER_LED, (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+
+    digitalWrite(MISCLED3,!(vcu_status.get_no_accel_implausability()));
+    digitalWrite(MISCLED1,!(vcu_status.get_no_accel_brake_implausability()));
+    digitalWrite(MISCLED2,!(vcu_status.get_no_brake_implausability()));
 #if DEBUG
     Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
     Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
@@ -213,12 +217,14 @@ void gpio_init()
   for (int i = 0; i < 3; i++)
   {
     pinMode(misc_led_gpios[i], OUTPUT);
-    digitalWrite(misc_led_gpios[i], LOW);
+    analogWrite(misc_led_gpios[i], fault_led_duty);
+    digitalWrite(misc_led_gpios[i], 0);
   }
   for (int i = 0; i < 4; i++)
   {
     pinMode(fault_led_gpios[i], OUTPUT);
-    digitalWrite(fault_led_gpios[i], LOW);
+    analogWrite(fault_led_gpios[i], fault_led_duty);
+    digitalWrite(fault_led_gpios[i], 0);
   }
 #if DEBUG
   Serial.println("GPIOs initialized");
