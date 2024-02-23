@@ -240,7 +240,8 @@ uint8_t getButtons()
   uint8_t buttonStatuses = 0;
   for (int i = 0; i < 6; i++)
   {
-    buttonStatuses |= (digitalRead(dashButtons[i]) << i);
+    // the ! is because buttons are active low
+    buttonStatuses |= (!(digitalRead(dashButtons[i])) << i);
   }
 #if DEBUG
   Serial.print("Button Stats: ");
