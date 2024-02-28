@@ -61,7 +61,8 @@ void set_single_segment_indicator(uint8_t number_to_display);
 
 static CAN_message_t fw_hash_msg;
 device_status_t dash_status_t;
-const uint8_t fault_led_duty = 0x0F;
+const uint8_t fault_led_duty = 0x0f;
+static uint8_t torque_mode_uint;
 void setup()
 {
   init_can();
@@ -135,22 +136,23 @@ void loop()
   if (update_fault_leds.check())
   {
     // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
-    digitalWrite(AMS_LED, !(vcu_status.get_bms_ok_high()));
+    analogWrite(AMS_LED, fault_led_duty * !(vcu_status.get_bms_ok_high()));
 
-    digitalWrite(BSPD_LED, !(vcu_status.get_bspd_ok_high()));
+    analogWrite(BSPD_LED, fault_led_duty * !(vcu_status.get_bspd_ok_high()));
 
-    digitalWrite(IMD_LED, !(vcu_status.get_imd_ok_high()));
+    analogWrite(IMD_LED, fault_led_duty * !(vcu_status.get_imd_ok_high()));
     // For the inverter fault, we just OR all the fault fields, since fault code > 0 == bad == turn light on
-    digitalWrite(INVERTER_LED, (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+    analogWrite(INVERTER_LED, fault_led_duty * (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
 
-    digitalWrite(MISCLED3,!(vcu_status.get_no_accel_implausability()));
-    digitalWrite(MISCLED1,!(vcu_status.get_no_accel_brake_implausability()));
-    digitalWrite(MISCLED2,!(vcu_status.get_no_brake_implausability()));
+    analogWrite(MISCLED3,fault_led_duty * !(vcu_status.get_accel_implausability()));
+    analogWrite(MISCLED1,fault_led_duty * !(vcu_status.get_accel_brake_implausability()));
+    analogWrite(MISCLED2,fault_led_duty * !(vcu_status.get_brake_implausibility()));
 #if DEBUG
     Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
     Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
     Serial.printf("This is the IMD OK HIGH boolean: %d\n", vcu_status.get_imd_ok_high());
     Serial.printf("These are the Inverter Fault Codes: Post_fault_hi: %d Post_fault_lo: %d Run_fault_hi: %d Run_fault_lo: %d\n", mc_fault_codes.get_post_fault_hi(), mc_fault_codes.get_post_fault_lo(), mc_fault_codes.get_run_fault_hi(), mc_fault_codes.get_run_fault_lo());
+    Serial.printf("Accel implaus: %d Accel&Brake Implaus: %d Brake Implaus: %d\n",vcu_status.get_accel_implausability(),vcu_status.get_accel_brake_implausability(),vcu_status.get_brake_implausibility());
 #endif
   }
 }
@@ -192,7 +194,7 @@ bool dash_init()
 #endif
   }
   seven_segment.setBrightness(15);
-  seven_segment.print("COPE");
+  seven_segment.print("yeet");
   seven_segment.writeDisplay();
   delay(500);
   return true;
@@ -218,13 +220,13 @@ void gpio_init()
   {
     pinMode(misc_led_gpios[i], OUTPUT);
     analogWrite(misc_led_gpios[i], fault_led_duty);
-    digitalWrite(misc_led_gpios[i], 0);
+    digitalWrite(misc_led_gpios[i], LOW);
   }
   for (int i = 0; i < 4; i++)
   {
     pinMode(fault_led_gpios[i], OUTPUT);
     analogWrite(fault_led_gpios[i], fault_led_duty);
-    digitalWrite(fault_led_gpios[i], 0);
+    digitalWrite(fault_led_gpios[i], LOW);
   }
 #if DEBUG
   Serial.println("GPIOs initialized");
@@ -363,28 +365,36 @@ void test_socpixels()
     delay(100);
   }
 }
-// This method is not currently used because the seven segment on the KS6e
-// Dash doesn't work (because of schematic mistakes)
-// It should be kept here tho
-void set_single_segment_indicator(const uint8_t number_to_display)
+
+// Something is fucked up on the 6e dash so it displays a 1 when you
+// Try to display 3, and an E when you try to
+// Display a 1 :(
+void set_single_segment_indicator(uint8_t number_to_display)
 {
   digitalWrite(LATCH_1, LOW);
-  delayMicroseconds(100);
-  uint8_t new_num = number_to_display & 0x0F;
-  bool led_a_high = new_num & 0b0001;
-  bool led_b_high = new_num & 0b0010;
-  bool led_c_high = new_num & 0b0100;
-  bool led_d_high = new_num & 0b1000;
+  delayMicroseconds(200);
+  if (number_to_display == 1)
+  {
+    number_to_display = 3;
+  }
+  else if (number_to_display == 3)
+  {
+    number_to_display = 1;
+  }
+  bool led_a_high = number_to_display & 0b0001;
+  bool led_b_high = number_to_display & 0b0010;
+  bool led_c_high = number_to_display & 0b0100;
+  bool led_d_high = number_to_display & 0b1000;
 #if DEBUG
-  Serial.printf("SEVEN SEGMENT INPUT: %d %d A: %d B: %d C: %d D: %d\n", number_to_display, new_num, led_a_high, led_b_high, led_c_high, led_d_high);
+  Serial.printf("SEVEN SEGMENT INPUT: %d A: %d B: %d C: %d D: %d\n", number_to_display, led_a_high, led_b_high, led_c_high, led_d_high);
 #endif
   digitalWrite(LED_A, led_a_high);
   digitalWrite(LED_B, led_b_high);
   digitalWrite(LED_C, led_c_high);
   digitalWrite(LED_D, led_d_high);
-  delayMicroseconds(100);
+  delayMicroseconds(200);
   // there may need to be a delay here, but dont want to block
   digitalWrite(LATCH_1, HIGH);
-  delayMicroseconds(100);
+  delayMicroseconds(200);
   digitalWrite(LATCH_1, LOW);
 }
