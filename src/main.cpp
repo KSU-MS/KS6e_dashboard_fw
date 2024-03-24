@@ -61,7 +61,7 @@ void set_single_segment_indicator(uint8_t number_to_display);
 
 static CAN_message_t fw_hash_msg;
 device_status_t dash_status_t;
-const uint8_t fault_led_duty = 0x0f;
+const uint8_t fault_led_duty = 0x05;
 static uint8_t torque_mode_uint;
 void setup()
 {
@@ -107,6 +107,7 @@ void loop()
 
   if (send_dash_status_timer.check())
   {
+    digitalToggle(LED_BUILTIN);
     dash_status_t.on_time_seconds = (millis() / 1000);
     memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
 #if DEBUG
@@ -142,11 +143,11 @@ void loop()
 
     analogWrite(IMD_LED, fault_led_duty * !(vcu_status.get_imd_ok_high()));
     // For the inverter fault, we just OR all the fault fields, since fault code > 0 == bad == turn light on
-    analogWrite(INVERTER_LED, fault_led_duty * (mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
+    analogWrite(INVERTER_LED, fault_led_duty * (mc_fault_codes.get_post_fault_hi() || mc_fault_codes.get_post_fault_lo() || mc_fault_codes.get_run_fault_hi() || mc_fault_codes.get_run_fault_lo()));
 
-    analogWrite(MISCLED3,fault_led_duty * !(vcu_status.get_accel_implausability()));
-    analogWrite(MISCLED1,fault_led_duty * !(vcu_status.get_accel_brake_implausability()));
-    analogWrite(MISCLED2,fault_led_duty * !(vcu_status.get_brake_implausibility()));
+    analogWrite(MISCLED3,fault_led_duty * (vcu_status.get_accel_implausability()));
+    analogWrite(MISCLED1,fault_led_duty * (vcu_status.get_accel_brake_implausability()));
+    analogWrite(MISCLED2,fault_led_duty * (vcu_status.get_brake_implausibility()));
 #if DEBUG
     Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
     Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
@@ -197,6 +198,7 @@ bool dash_init()
   seven_segment.print("yeet");
   seven_segment.writeDisplay();
   delay(500);
+  vcu_status.set_pedal_states(0xff); // Set pedal states to fault state so lights are on if SNA
   return true;
 };
 
@@ -227,6 +229,9 @@ void gpio_init()
     pinMode(fault_led_gpios[i], OUTPUT);
     analogWrite(fault_led_gpios[i], fault_led_duty);
     digitalWrite(fault_led_gpios[i], LOW);
+    // init builtin led
+    pinMode(LED_BUILTIN,OUTPUT);
+    digitalWrite(LED_BUILTIN,HIGH);
   }
 #if DEBUG
   Serial.println("GPIOs initialized");
@@ -279,7 +284,7 @@ void updateSOCNeopixels(int soc)
   }
   for (int i = (PIXELS_FOR_SOC - 1); i >= num_leds_enabled; i--)
   {
-    leds.setPixel(i, 0x0f'00'00);
+    leds.setPixel(i, 0x0a'00'00);
   }
   int soc_mod = soc % 10;
   if (num_leds_enabled < PIXELS_FOR_SOC && soc_mod > 0)
@@ -366,21 +371,10 @@ void test_socpixels()
   }
 }
 
-// Something is fucked up on the 6e dash so it displays a 1 when you
-// Try to display 3, and an E when you try to
-// Display a 1 :(
 void set_single_segment_indicator(uint8_t number_to_display)
 {
   digitalWrite(LATCH_1, LOW);
   delayMicroseconds(200);
-  if (number_to_display == 1)
-  {
-    number_to_display = 3;
-  }
-  else if (number_to_display == 3)
-  {
-    number_to_display = 1;
-  }
   bool led_a_high = number_to_display & 0b0001;
   bool led_b_high = number_to_display & 0b0010;
   bool led_c_high = number_to_display & 0b0100;
