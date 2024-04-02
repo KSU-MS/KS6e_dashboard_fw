@@ -48,8 +48,11 @@ MC_voltage_information mc_voltage_info;
 MC_fault_codes mc_fault_codes;
 MCU_status vcu_status;
 int tempdisplay_;
+int tempdisplayvoltage_;
 uint8_t state_of_charge = 0;
 uint8_t vcu_last_torque = 0;
+uint16_t vcu_glv_sense = 0;
+
 bool dash_init();
 bool display_enabled;
 void gpio_init();
@@ -126,6 +129,12 @@ void loop()
       {
         seven_segment.print(vcu_status.get_max_torque(), DEC);
         tempdisplay_--; // this is so dumb
+      }
+      else if (tempdisplayvoltage_ >= 1)
+      {
+        float glv_v = static_cast<float>(vcu_glv_sense) * (3.3/1024) * 7.87;
+        seven_segment.print(glv_v, DEC);
+        tempdisplayvoltage_--;
       }
       else
       {

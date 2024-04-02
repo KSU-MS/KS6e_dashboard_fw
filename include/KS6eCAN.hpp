@@ -26,7 +26,7 @@
 #define ID_VCU_STATUS						0xC3
 #define ID_VCU_PEDAL_READINGS				0xC4
 #define ID_VCU_WS_READINGS                  0xC6
-
+#define ID_VCU_BOARD_READINGS_ONE           0xC9
 #define ID_DASH_BUTTONS                     0xEB
 #define ID_DASH_FW_VERSION                  0xEC
 

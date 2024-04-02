@@ -6,9 +6,11 @@ extern MC_fault_codes mc_fault_codes;
 extern MCU_status vcu_status;
 extern uint8_t state_of_charge;
 extern uint8_t vcu_last_torque;
+extern uint16_t vcu_glv_sense;
 extern int tempdisplay_;
+extern int tempdisplayvoltage_;
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
-
+elapsedMillis voltageViewTimer = 0;
 void init_can()
 {
     // inverter can must send & receive, 6rx MB and 2tx MB
@@ -78,6 +80,17 @@ void update_can()
         case (ID_MC_FAULT_CODES):
         {
             mc_fault_codes.load(rx_msg.buf);
+            break;
+        }
+        case (ID_VCU_BOARD_READINGS_ONE):
+        {
+            memcpy(&vcu_glv_sense,&rx_msg.buf[2],sizeof(vcu_glv_sense));
+            Serial.printf("Loaded VCU voltage reading: %d",vcu_glv_sense);
+            if (voltageViewTimer >= 5000 && vcu_status.get_state() == MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE)
+            {
+                voltageViewTimer=0;
+                tempdisplayvoltage_ = 10;
+            }
             break;
         }
         default:
