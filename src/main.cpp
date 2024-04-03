@@ -4,11 +4,11 @@
  * @brief main code for ks6e dash
  * @version 0.1
  * @date 2022-12-29
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
-//lib includes
+// lib includes
 #include <Arduino.h>
 #include <WS2812Serial.h>
 #include "FlexCAN_T4.h"
@@ -17,23 +17,25 @@
 #include <Metro.h>
 #include <bitset>
 #include "Adafruit_LEDBackpack.h"
-//our includes
+// our includes
 #include "FlexCAN_util.hpp"
 #include <KS6eDashGPIO.hpp>
 #include <neopixel_defs.hpp>
 #include <MCU_status.hpp>
 #include <inverter.hpp>
- 
+#include <device_status.hpp>
+
 #define DEBUG true
 
-//timers
-Metro update_pixels_timer = Metro(100,1);
-Metro send_buttons_timer = Metro(100,1);
-Metro update_sevensegment_timer = Metro(100,1);
-Metro update_fault_leds = Metro(100,1);
+// timers
+Metro update_pixels_timer = Metro(100, 1);
+Metro send_buttons_timer = Metro(100, 1);
+Metro update_sevensegment_timer = Metro(100, 1);
+Metro update_fault_leds = Metro(100, 1);
+Metro send_dash_status_timer = Metro(1000, 1);
 /**
  * @brief variables, objects, etc. for neopixel handling
- * 
+ *
  */
 const int numled = NUMBER_OF_PIXELS;
 byte drawingMemory[numled * 3];         //  3 bytes per LED
@@ -41,15 +43,18 @@ DMAMEM byte displayMemory[numled * 12]; // 12 bytes per LED
 WS2812Serial leds(numled, displayMemory, drawingMemory, NEOPIXELDIN, WS2812_GRB);
 Adafruit_7segment seven_segment = Adafruit_7segment();
 
-//variables for SoC, VCU state, SDC error flags
+// variables for SoC, VCU state, SDC error flags
 MC_voltage_information mc_voltage_info;
 MC_fault_codes mc_fault_codes;
 MCU_status vcu_status;
 int tempdisplay_;
+int tempdisplayvoltage_;
 uint8_t state_of_charge = 0;
 uint8_t vcu_last_torque = 0;
-uint8_t sdc_error_flags = 0; //TODO define bit arrangement for fault flags
-void dash_init();
+uint16_t vcu_glv_sense = 0;
+
+bool dash_init();
+bool display_enabled;
 void gpio_init();
 uint8_t getButtons();
 void updateSOCNeopixels(int soc);
@@ -57,244 +62,342 @@ void updateStatusNeopixels(MCU_status MCU_status);
 void test_socpixels();
 void set_single_segment_indicator(uint8_t number_to_display);
 
-void setup() {
+static CAN_message_t fw_hash_msg;
+device_status_t dash_status_t;
+const uint8_t fault_led_duty = 0x05;
+static uint8_t torque_mode_uint;
+void setup()
+{
   init_can();
-  gpio_init(); 
-  dash_init();
+  gpio_init();
+  display_enabled = dash_init();
+  vcu_status.set_state(MCU_STATE::STARTUP);
+  state_of_charge = 0;
+
+  fw_hash_msg.id = ID_DASH_FW_VERSION;
+  fw_hash_msg.len = 8;
+  dash_status_t.on_time_seconds = (millis() / 1000);
+  memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
+  WriteCAN(fw_hash_msg);
+#if DEBUG
+  Serial.println("Startup complete");
+#endif
 }
 
-void loop() {
+void loop()
+{
   update_can();
 
-  if(update_pixels_timer.check()){
+  if (update_pixels_timer.check())
+  {
     updateSOCNeopixels(state_of_charge);
     updateStatusNeopixels(vcu_status);
     leds.show();
   }
-    if(send_buttons_timer.check()){
-    uint8_t buf[]={getButtons(),0,0,0,0,0,0,0};
-    load_can(ID_DASH_BUTTONS,false,buf);
+  if (send_buttons_timer.check())
+  {
+    CAN_message_t button_status_msg;
+    button_status_msg.id = ID_DASH_BUTTONS;
+    button_status_msg.len = 1;
+    button_status_msg.buf[0] = getButtons();
+#if DEBUG
+    Serial.println("Sent off buttons");
+    Serial.printf("Time: %d\n",millis());
+#endif
+    WriteCAN(button_status_msg);
   }
 
-  if(update_sevensegment_timer.check()){
-    if(tempdisplay_>=1){
+
+  if (send_dash_status_timer.check())
+  {
+    digitalToggle(LED_BUILTIN);
+    dash_status_t.on_time_seconds = (millis() / 1000);
+    memcpy(fw_hash_msg.buf, &dash_status_t, sizeof(dash_status_t));
+#if DEBUG
+    Serial.printf("dash status hash: %x time: %d dirty: %d main: %d\n",dash_status_t.firmware_version,dash_status_t.on_time_seconds,dash_status_t.project_is_dirty,dash_status_t.project_on_main_or_master);
+#endif
+    WriteCAN(fw_hash_msg);
+  }
+  if (update_sevensegment_timer.check())
+  {
+    set_single_segment_indicator(vcu_status.get_torque_mode());
+    if (display_enabled | seven_segment.begin())
+    {
       seven_segment.begin();
       seven_segment.clear();
-      seven_segment.print(vcu_status.get_max_torque(), DEC);
-      seven_segment.writeDisplay();
-      tempdisplay_--; //this is so dumb
-    }else{
-      seven_segment.begin();
-      seven_segment.clear();
-      seven_segment.print(mc_voltage_info.get_dc_bus_voltage(), DEC);
+      if (tempdisplay_ >= 1)
+      {
+        seven_segment.print(vcu_status.get_max_torque(), DEC);
+        tempdisplay_--; // this is so dumb
+      }
+      else if (tempdisplayvoltage_ >= 1)
+      {
+        float glv_v = static_cast<float>(vcu_glv_sense) * (3.3/1024) * 7.87;
+        seven_segment.print(glv_v, DEC);
+        tempdisplayvoltage_--;
+      }
+      else
+      {
+        seven_segment.print(mc_voltage_info.get_dc_bus_voltage(), DEC);
+      }
       seven_segment.writeDisplay();
     }
   }
-  if(update_fault_leds.check()){
-    digitalWrite(AMS_LED,!(vcu_status.get_bms_ok_high())); // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
-    Serial.printf("This is the BMS OK HIGH boolean: %d\n",vcu_status.get_bms_ok_high());
+  if (update_fault_leds.check())
+  {
+    // NEED THE ! there so the leds work, pull low instead of high. confirmed working 3/28/23, in VCU false = light ON, true = light OFF
+    analogWrite(AMS_LED, fault_led_duty * !(vcu_status.get_bms_ok_high()));
 
-    digitalWrite(BSPD_LED,!(vcu_status.get_bspd_ok_high()));
-    Serial.printf("This is the BSPD OK HIGH boolean: %d\n",vcu_status.get_bspd_ok_high());
+    analogWrite(BSPD_LED, fault_led_duty * !(vcu_status.get_bspd_ok_high()));
 
-    digitalWrite(IMD_LED,!(vcu_status.get_imd_ok_high()));
-    Serial.printf("This is the IMD OK HIGH boolean: %d\n",vcu_status.get_imd_ok_high());
-    //For the inverter fault, we OR all the fault fields, since fault code < 0 == bad == turn light on
-    digitalWrite(INVERTER_LED,(mc_fault_codes.get_post_fault_hi() | mc_fault_codes.get_post_fault_lo() | mc_fault_codes.get_run_fault_hi() | mc_fault_codes.get_run_fault_lo()));
-    Serial.printf("These are the Inverter Fault Codes: Post_fault_hi: %d Post_fault_lo: %d Run_fault_hi: %d Run_fault_lo: %d\n",mc_fault_codes.get_post_fault_hi(),mc_fault_codes.get_post_fault_lo(),mc_fault_codes.get_run_fault_hi(),mc_fault_codes.get_run_fault_lo());
+    analogWrite(IMD_LED, fault_led_duty * !(vcu_status.get_imd_ok_high()));
+    // For the inverter fault, we just OR all the fault fields, since fault code > 0 == bad == turn light on
+    analogWrite(INVERTER_LED, fault_led_duty * (mc_fault_codes.get_post_fault_hi() || mc_fault_codes.get_post_fault_lo() || mc_fault_codes.get_run_fault_hi() || mc_fault_codes.get_run_fault_lo()));
+
+    analogWrite(MISCLED3,fault_led_duty * (vcu_status.get_accel_implausability()));
+    analogWrite(MISCLED1,fault_led_duty * (vcu_status.get_accel_brake_implausability()));
+    analogWrite(MISCLED2,fault_led_duty * (vcu_status.get_brake_implausibility()));
+#if DEBUG
+    Serial.printf("This is the BMS OK HIGH boolean: %d\n", vcu_status.get_bms_ok_high());
+    Serial.printf("This is the BSPD OK HIGH boolean: %d\n", vcu_status.get_bspd_ok_high());
+    Serial.printf("This is the IMD OK HIGH boolean: %d\n", vcu_status.get_imd_ok_high());
+    Serial.printf("These are the Inverter Fault Codes: Post_fault_hi: %d Post_fault_lo: %d Run_fault_hi: %d Run_fault_lo: %d\n", mc_fault_codes.get_post_fault_hi(), mc_fault_codes.get_post_fault_lo(), mc_fault_codes.get_run_fault_hi(), mc_fault_codes.get_run_fault_lo());
+    Serial.printf("Accel implaus: %d Accel&Brake Implaus: %d Brake Implaus: %d\n",vcu_status.get_accel_implausability(),vcu_status.get_accel_brake_implausability(),vcu_status.get_brake_implausibility());
+#endif
   }
-
-
-  //TODO remove for commissioning
-  //test_socpixels();
 }
 
-
-void colorWipe(int color, int wait_us) {
-  for (int i=0; i < leds.numPixels(); i++) {
+void colorWipe(int color, int wait_us)
+{
+  for (int i = 0; i < leds.numPixels(); i++)
+  {
     leds.setPixel(i, color);
     leds.show();
     delayMicroseconds(wait_us);
   }
 }
-void dash_init(){
+bool dash_init()
+{
   leds.begin();
   leds.setBrightness(BRIGHTNESS);
   delay(10);
   int microsec = 200000 / leds.numPixels();
-    colorWipe(RED, microsec);
-    colorWipe(ORANGE, microsec);
-    colorWipe(YELLOW, microsec);
-    colorWipe(GREEN, microsec);
-    colorWipe(BLUE, microsec);
-    colorWipe(0x8F00FF,microsec);
-    colorWipe(PINK, microsec);
-    colorWipe(0xFFFFFF, microsec);
-    colorWipe(GREEN, microsec);
+  colorWipe(RED, microsec);
+  colorWipe(ORANGE, microsec);
+  colorWipe(YELLOW, microsec);
+  colorWipe(GREEN, microsec);
+  colorWipe(BLUE, microsec);
+  colorWipe(0x8F00FF, microsec);
+  colorWipe(PINK, microsec);
+  colorWipe(0xFFFFFF, microsec);
+  colorWipe(GREEN, microsec);
   for (int i = 0; i < leds.numPixels(); i++)
   {
     leds.setPixel(i, BLACK);
   }
   leds.show();
-  if(!seven_segment.begin()){
+  if (!seven_segment.begin())
+  {
+    return false;
+#if DEBUG
     Serial.println("L dash");
+#endif
   }
   seven_segment.setBrightness(15);
-  seven_segment.print("COPE");
+  seven_segment.print("yeet");
   seven_segment.writeDisplay();
+  delay(500);
+  vcu_status.set_pedal_states(0xff); // Set pedal states to fault state so lights are on if SNA
+  return true;
 };
 
-
-
 /**
- * @brief 
- * 
+ * @brief
+ *
  */
-void gpio_init(){
-  //initial button pins as inputs
-  for (int i=0; i<6;i++){
-    pinMode(dashButtons[i],INPUT_PULLUP);
+void gpio_init()
+{
+  // initial button pins as inputs
+  for (int i = 0; i < 6; i++)
+  {
+    pinMode(dashButtons[i], INPUT_PULLUP);
   }
-  //initialize LED driver pins as outputs
-  for (int i=0; i<5;i++){
-    pinMode(seven_seg_gpios[i],OUTPUT);
+  // initialize LED driver pins as outputs
+  for (int i = 0; i < 5; i++)
+  {
+    pinMode(seven_seg_gpios[i], OUTPUT);
   }
-  for (int i=0; i<3;i++){
-    pinMode(misc_led_gpios[i],OUTPUT);
+  for (int i = 0; i < 3; i++)
+  {
+    pinMode(misc_led_gpios[i], OUTPUT);
+    analogWrite(misc_led_gpios[i], fault_led_duty);
+    digitalWrite(misc_led_gpios[i], LOW);
   }
-  #if DEBUG
+  for (int i = 0; i < 4; i++)
+  {
+    pinMode(fault_led_gpios[i], OUTPUT);
+    analogWrite(fault_led_gpios[i], fault_led_duty);
+    digitalWrite(fault_led_gpios[i], LOW);
+    // init builtin led
+    pinMode(LED_BUILTIN,OUTPUT);
+    digitalWrite(LED_BUILTIN,HIGH);
+  }
+#if DEBUG
   Serial.println("GPIOs initialized");
-  #endif
+#endif
 }
 /**
  * @brief Get the Buttons object
- * 
- * @return uint8_t 
+ *
+ * @return uint8_t
  */
-uint8_t getButtons(){
-  uint8_t buttonStatuses=0;
-  for (int i=0; i<6;i++){
-    buttonStatuses |= (digitalRead(dashButtons[i]) << i);
+uint8_t getButtons()
+{
+  uint8_t buttonStatuses = 0;
+  for (int i = 0; i < 6; i++)
+  {
+    // the ! is because buttons are active low
+    buttonStatuses |= (!(digitalRead(dashButtons[i])) << i);
   }
-  #if DEBUG
+#if DEBUG
   Serial.print("Button Stats: ");
-  Serial.println(buttonStatuses,BIN);
-  #endif
+  Serial.println(buttonStatuses, BIN);
+#endif
   return buttonStatuses;
 }
 /**
- * @brief 
- * 
- * @param soc 
+ * @brief
+ *
+ * @param soc
  */
-void updateSOCNeopixels(int soc){
-  #if DEBUG
-  Serial.printf("State of charge value in neopixel update method: %d\n",soc);
-  #endif
-  if(soc > 100){soc=100;}else if(soc<0){soc=0;}
+void updateSOCNeopixels(int soc)
+{
+#if DEBUG
+  Serial.printf("State of charge value in neopixel update method: %d\n", soc);
+#endif
+  if (soc > 100)
+  {
+    soc = 100;
+  }
+  else if (soc < 0)
+  {
+    soc = 0;
+  }
   float soc_f = soc;
   soc_f /= 100;
   int num_leds_enabled = PIXELS_FOR_SOC * soc_f;
-  int num_leds_leftover = PIXELS_FOR_SOC-num_leds_enabled;
-  for (int i=0;i<num_leds_enabled;i++){
-    leds.setPixel(i,GREEN);
+  int num_leds_leftover = PIXELS_FOR_SOC - num_leds_enabled;
+  for (int i = 0; i < num_leds_enabled; i++)
+  {
+    leds.setPixel(i, GREEN);
   }
-  for (int i=(PIXELS_FOR_SOC-1); i>=num_leds_enabled;i--){
-    leds.setPixel(i,0x0f'00'00);
+  for (int i = (PIXELS_FOR_SOC - 1); i >= num_leds_enabled; i--)
+  {
+    leds.setPixel(i, 0x0a'00'00);
   }
   int soc_mod = soc % 10;
-  if(num_leds_enabled<PIXELS_FOR_SOC && soc_mod > 0){
+  if (num_leds_enabled < PIXELS_FOR_SOC && soc_mod > 0)
+  {
     float soc_percent_mod = soc_mod;
     soc_percent_mod /= 10;
-    uint8_t soc_green = 128*soc_percent_mod;
-    uint8_t soc_red = 255-soc_green;
+    uint8_t soc_green = 128 * soc_percent_mod;
+    uint8_t soc_red = 255 - soc_green;
     // first byte is red, second is green, third is blue
     uint32_t soc_percentage_color = (soc_red << 16) | (soc_green << 8);
-    leds.setPixel(num_leds_enabled,soc_percentage_color);
+    leds.setPixel(num_leds_enabled, soc_percentage_color);
   }
-  // #if DEBUG
-  // Serial.printf("Set %d to %d ON, set %d to %d OFF\n",1,num_leds_enabled,num_leds_enabled+1,PIXELS_FOR_SOC);
-  // #endif
+#if DEBUG
+  Serial.printf("Set %d to %d ON, set %d to %d OFF\n", 1, num_leds_enabled, num_leds_enabled + 1, PIXELS_FOR_SOC);
+#endif
 }
 /**
- * @brief 
- * 
- * @param mcu_status 
+ * @brief
+ *
+ * @param mcu_status
  */
-void updateStatusNeopixels(MCU_status mcu_status){
-  uint32_t status_color=BLACK;
-  switch (mcu_status.get_state()){
-    case MCU_STATE::STARTUP:
-    {
-      status_color=BLUE;
-      break;
-    }
-    case MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE:
-    {
-      status_color=GREEN;
-      break;
-    }
-    case MCU_STATE::TRACTIVE_SYSTEM_ACTIVE:
-    {
-      status_color = RED;
-      break;
-    }
-    case MCU_STATE::ENABLING_INVERTER:
-    {
-      status_color = YELLOW;
-      break;
-    }
-    case MCU_STATE::WAITING_READY_TO_DRIVE_SOUND:
-    {
-      status_color=ORANGE;
-      break;
-    }
-    case MCU_STATE::READY_TO_DRIVE:
-    {
-      status_color=PINK;
-      break;
-    }
+void updateStatusNeopixels(MCU_status mcu_status)
+{
+  uint32_t status_color = BLACK;
+  switch (mcu_status.get_state())
+  {
+  case MCU_STATE::STARTUP:
+  {
+    status_color = BLUE;
+    break;
   }
-  for(int i=PIXELS_FOR_SOC;i<NUMBER_OF_PIXELS;i++){
-    leds.setPixel(i,status_color);
+  case MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE:
+  {
+    status_color = GREEN;
+    break;
+  }
+  case MCU_STATE::TRACTIVE_SYSTEM_ACTIVE:
+  {
+    status_color = RED;
+    break;
+  }
+  case MCU_STATE::ENABLING_INVERTER:
+  {
+    status_color = YELLOW;
+    break;
+  }
+  case MCU_STATE::WAITING_READY_TO_DRIVE_SOUND:
+  {
+    status_color = ORANGE;
+    break;
+  }
+  case MCU_STATE::READY_TO_DRIVE:
+  {
+    status_color = PINK;
+    break;
+  }
+  }
+  for (int i = PIXELS_FOR_SOC; i < NUMBER_OF_PIXELS; i++)
+  {
+    leds.setPixel(i, status_color);
   }
 }
 /**
- * @brief 
- * 
+ * @brief
+ *
  */
-void test_socpixels(){
+void test_socpixels()
+{
   Serial.println("Starting count up");
-  for(int i=0; i<=100; i++){
+  for (int i = 0; i <= 100; i++)
+  {
     updateSOCNeopixels(i);
     leds.show();
     Serial.println(i);
     delay(100);
- }
+  }
   Serial.println("Starting count down");
-  for(int i=100; i>=0; i--){
+  for (int i = 100; i >= 0; i--)
+  {
     updateSOCNeopixels(i);
     leds.show();
     Serial.println(i);
     delay(100);
   }
 }
-//This method is not currently used because the seven segment on the KS6e
-//Dash doesn't work (because of schematic mistakes)
-//It should be kept here tho
-void set_single_segment_indicator(uint8_t number_to_display){
-  digitalWrite(LATCH_1,HIGH);
-  bool led_a_high = number_to_display && 0b0001;
-  bool led_b_high = number_to_display && 0b0010;
-  bool led_c_high = number_to_display && 0b0100;
-  bool led_d_high = number_to_display && 0b1000;
-  #if DEBUG
-  Serial.printf("SEVEN SEGMENT A: %d B: %d C: %d D: %d");
-  #endif
-  digitalWrite(LED_A,led_a_high);
-  digitalWrite(LED_B,led_b_high);
-  digitalWrite(LED_C,led_c_high);
-  digitalWrite(LED_D,led_d_high);
+
+void set_single_segment_indicator(uint8_t number_to_display)
+{
+  digitalWrite(LATCH_1, LOW);
+  delayMicroseconds(200);
+  bool led_a_high = number_to_display & 0b0001;
+  bool led_b_high = number_to_display & 0b0010;
+  bool led_c_high = number_to_display & 0b0100;
+  bool led_d_high = number_to_display & 0b1000;
+#if DEBUG
+  Serial.printf("SEVEN SEGMENT INPUT: %d A: %d B: %d C: %d D: %d\n", number_to_display, led_a_high, led_b_high, led_c_high, led_d_high);
+#endif
+  digitalWrite(LED_A, led_a_high);
+  digitalWrite(LED_B, led_b_high);
+  digitalWrite(LED_C, led_c_high);
+  digitalWrite(LED_D, led_d_high);
+  delayMicroseconds(200);
   // there may need to be a delay here, but dont want to block
-digitalWrite(LATCH_1,LOW);
+  digitalWrite(LATCH_1, HIGH);
+  delayMicroseconds(200);
+  digitalWrite(LATCH_1, LOW);
 }
