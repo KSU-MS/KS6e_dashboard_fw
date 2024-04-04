@@ -132,7 +132,7 @@ void loop()
       }
       else if (tempdisplayvoltage_ >= 1)
       {
-        float glv_v = static_cast<float>(vcu_glv_sense) * (3.3/1024) * 7.87;
+        float glv_v = static_cast<float>(vcu_glv_sense) * (3.3/1024) * 8.116578257423327;
         seven_segment.print(glv_v, DEC);
         tempdisplayvoltage_--;
       }
