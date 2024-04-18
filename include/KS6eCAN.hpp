@@ -29,6 +29,7 @@
 #define ID_VCU_BOARD_READINGS_ONE           0xC9
 #define ID_DASH_BUTTONS                     0xEB
 #define ID_DASH_FW_VERSION                  0xEC
+#define ID_VCU_LAUNCH_CONTROL_COUNTDOWN                             0xCD
 
 #define ID_BMS_INFO                         0x6B1
 #define ID_BMS_SOC                          0x6B3 //TODO make this real on the BMS

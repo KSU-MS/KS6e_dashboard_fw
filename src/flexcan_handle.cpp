@@ -4,13 +4,27 @@
 extern MC_voltage_information mc_voltage_info;
 extern MC_fault_codes mc_fault_codes;
 extern MCU_status vcu_status;
+extern MC_command_message mc_command_message;
 extern uint8_t state_of_charge;
 extern uint8_t vcu_last_torque;
 extern uint16_t vcu_glv_sense;
+extern uint8_t lc_type;
+extern uint8_t lc_state;
 extern int tempdisplay_;
 extern int tempdisplayvoltage_;
+extern unsigned long vcu_lc_countdown;
+extern unsigned long vcu_lc_delay;
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
 elapsedMillis voltageViewTimer = 0;
+can_obj_ksu_ev_can_h_t ksu_can;
+
+int unpack_flexcan_message(can_obj_ksu_ev_can_h_t *o, CAN_message_t &msg)
+{
+    uint64_t data;
+    memcpy(&data, msg.buf, sizeof(msg.buf));
+    return unpack_message(o, msg.id, data, msg.len, millis());
+}
+
 void init_can()
 {
     // inverter can must send & receive, 6rx MB and 2tx MB
@@ -54,6 +68,7 @@ void update_can()
     CAN_message_t rx_msg;
     if (ReadCAN(rx_msg))
     {
+        unpack_flexcan_message(&ksu_can,rx_msg);
         switch (rx_msg.id)
         {
         case (ID_BMS_SOC):
@@ -91,6 +106,24 @@ void update_can()
                 voltageViewTimer=0;
                 tempdisplayvoltage_ = 10;
             }
+            break;
+        }
+        case (ID_MC_COMMAND_MESSAGE):
+        {
+            mc_command_message.load(rx_msg.buf);
+            break;
+        }
+        case (CAN_ID_VCU_LAUNCHCONTROL_DIAGDATA):
+        {
+            decode_can_0x0cb_vcu_launchcontrol_type(&ksu_can,&lc_type);
+            decode_can_0x0cb_vcu_launchcontrol_state(&ksu_can,&lc_state);
+            break;
+        }
+        case (ID_VCU_LAUNCH_CONTROL_COUNTDOWN):
+        {
+            memcpy(&vcu_lc_countdown, &rx_msg.buf, sizeof(vcu_lc_countdown));
+            memcpy(&vcu_lc_delay, &rx_msg.buf[4], sizeof(vcu_lc_delay));
+
             break;
         }
         default:
