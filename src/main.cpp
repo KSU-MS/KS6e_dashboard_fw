@@ -47,15 +47,19 @@ MC_voltage_information mc_voltage_info;
 MC_fault_codes mc_fault_codes;
 MCU_status vcu_status;
 MC_command_message mc_command_message;
-int tempdisplay_;
-int tempdisplayvoltage_;
+int tempdisplay_ = 0;
+int tempdisplayvoltage_ = 0;
+int tempdisplaylc_ = 0;
+int tempdisplaytc_ = 0;
 uint8_t state_of_charge = 0;
 uint8_t vcu_last_torque = 0;
 uint16_t vcu_glv_sense = 0;
 uint8_t lc_state;
 uint8_t lc_type;
+uint8_t tc_type;
 unsigned long vcu_lc_countdown;
 unsigned long vcu_lc_delay;
+static float currbright = 1.0;
 
 bool dash_init();
 bool display_enabled;
@@ -65,7 +69,7 @@ void updateSOCNeopixels(int soc);
 void updateStatusNeopixels(MCU_status MCU_status);
 void test_socpixels();
 void set_single_segment_indicator(uint8_t number_to_display);
-
+void DashLedsBrightness();
 static CAN_message_t fw_hash_msg;
 device_status_t dash_status_t;
 const uint8_t fault_led_duty = 0x05;
@@ -96,6 +100,7 @@ void loop()
   {
     updateSOCNeopixels(state_of_charge);
     updateStatusNeopixels(vcu_status);
+    DashLedsBrightness();
     leds.show();
   }
   if (send_buttons_timer.check())
@@ -124,7 +129,7 @@ void loop()
   if (update_sevensegment_timer.check())
   {
     set_single_segment_indicator(vcu_status.get_torque_mode());
-    if (display_enabled | seven_segment.begin())
+    if (display_enabled || seven_segment.begin())
     {
       seven_segment.begin();
       seven_segment.clear();
@@ -144,6 +149,20 @@ void loop()
         seven_segment.writeDigitAscii(0, 'L');
         seven_segment.writeDigitAscii(1, 'C');
         seven_segment.writeDigitNum(3, lc_type);
+      }
+      else if (tempdisplaylc_ >= 1)
+      {
+        seven_segment.writeDigitAscii(0, 'L');
+        seven_segment.writeDigitAscii(1, 'C');
+        seven_segment.writeDigitNum(3, lc_type);
+        tempdisplaylc_--;
+      }
+      else if (tempdisplaytc_ >= 1)
+      {
+        seven_segment.writeDigitAscii(0, 't');
+        seven_segment.writeDigitAscii(1, 'C');
+        seven_segment.writeDigitNum(3, tc_type);
+        tempdisplaytc_--;
       }
       else
       {
@@ -190,7 +209,7 @@ bool dash_init()
   leds.begin();
   leds.setBrightness(BRIGHTNESS);
   delay(10);
-  int microsec = 200000 / leds.numPixels();
+  int microsec = 50000 / leds.numPixels();
   colorWipe(RED, microsec);
   colorWipe(ORANGE, microsec);
   colorWipe(YELLOW, microsec);
@@ -415,9 +434,17 @@ void updateStatusNeopixels(MCU_status mcu_status)
     break;
   }
   }
+  if (tc_type > 0)
+  {
+    leds.setPixel(15, CYAN*currbright);
+  }
+  else
+  {
+    leds.setPixel(15, BLACK);
+  }
   if (mcu_status.get_launch_ctrl_active())
   {
-    leds.setPixel(16, WHITE);
+    leds.setPixel(16, WHITE*currbright);
   }
   else
   {
@@ -426,6 +453,26 @@ void updateStatusNeopixels(MCU_status mcu_status)
   for (int i = PIXELS_FOR_SOC; i < NUMBER_OF_PIXELS - 3; i++)
   {
     leds.setPixel(i, status_color);
+  }
+}
+
+void DashLedsBrightness()
+{
+  if (currbright >= 1.0)
+  {
+    ledsdirection = false;
+  }
+  else if (currbright <= 0)
+  {
+    ledsdirection = true;
+  }
+  if (ledsdirection)
+  {
+    currbright += 0.1;
+  }
+  else
+  {
+    currbright -= 0.1;
   }
 }
 /**

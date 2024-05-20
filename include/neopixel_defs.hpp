@@ -3,7 +3,10 @@
 #define NUMBER_OF_PIXELS 17 //THere are seventeen total neopixels on the board
 #define PIXELS_FOR_SOC 11 //There are eleven neopixels on the top row intended for SOC
 #define PIXELS_FOR_VCU_STATE 1
-#define PIXELS_FOR_LC_ACTIVE 1 // this is dumb ash  \
+#define PIXELS_FOR_LC_ACTIVE 1 // this is dumb ash
+const int LC_ACTIVE_PIXEL = 16;
+const int TC_ACTIVE_PIXEL = 15;
+bool ledsdirection=true; //true is up, false is down
 // neo-pixel specific
 // color values are 0-255 (8 bits)
 // first byte is red, second is green, third is blue

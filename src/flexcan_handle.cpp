@@ -10,8 +10,11 @@ extern uint8_t vcu_last_torque;
 extern uint16_t vcu_glv_sense;
 extern uint8_t lc_type;
 extern uint8_t lc_state;
+extern uint8_t tc_type;
 extern int tempdisplay_;
 extern int tempdisplayvoltage_;
+extern int tempdisplaylc_;
+extern int tempdisplaytc_;
 extern unsigned long vcu_lc_countdown;
 extern unsigned long vcu_lc_delay;
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Inverter_CAN_;
@@ -100,7 +103,7 @@ void update_can()
         case (ID_VCU_BOARD_READINGS_ONE):
         {
             memcpy(&vcu_glv_sense,&rx_msg.buf[2],sizeof(vcu_glv_sense));
-            Serial.printf("Loaded VCU voltage reading: %d",vcu_glv_sense);
+            // Serial.printf("Loaded VCU voltage reading: %d\n",vcu_glv_sense);
             if (voltageViewTimer >= 5000 && vcu_status.get_state() == MCU_STATE::TRACTIVE_SYSTEM_NOT_ACTIVE)
             {
                 voltageViewTimer=0;
@@ -115,9 +118,28 @@ void update_can()
         }
         case (CAN_ID_VCU_LAUNCHCONTROL_DIAGDATA):
         {
-            decode_can_0x0cb_vcu_launchcontrol_type(&ksu_can,&lc_type);
+            uint8_t temp_lc_type;
+            decode_can_0x0cb_vcu_launchcontrol_type(&ksu_can,&temp_lc_type);
             decode_can_0x0cb_vcu_launchcontrol_state(&ksu_can,&lc_state);
+            if (temp_lc_type != lc_type)
+            {
+                lc_type = temp_lc_type;
+                tempdisplaylc_ = 10;
+            }
             break;
+        }
+        case (ID_VCU_TRACTION_CONTROLLER_INFO):
+        {
+            uint8_t temp_tc_type=0;
+            memcpy(&temp_tc_type, &rx_msg.buf[7],sizeof(temp_tc_type));
+            // Serial.printf("%d %d\n",temp_tc_type,tc_type);
+            if (temp_tc_type != tc_type)
+            {
+                tc_type = temp_tc_type;
+                tempdisplaytc_ = 10;
+            }            
+            break;
+            
         }
         case (ID_VCU_LAUNCH_CONTROL_COUNTDOWN):
         {
