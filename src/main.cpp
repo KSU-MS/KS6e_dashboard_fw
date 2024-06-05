@@ -60,7 +60,7 @@ uint8_t tc_type;
 unsigned long vcu_lc_countdown;
 unsigned long vcu_lc_delay;
 static float currbright = 1.0;
-
+elapsedMillis invTimeout;
 bool dash_init();
 bool display_enabled;
 void gpio_init();
@@ -94,8 +94,12 @@ void setup()
 
 void loop()
 {
-  update_can();
-
+  if (update_can())
+  {
+    invTimeout = 0;
+  }
+  if (invTimeout < 1000)
+  {
   if (update_pixels_timer.check())
   {
     updateSOCNeopixels(state_of_charge);
@@ -192,6 +196,23 @@ void loop()
     Serial.printf("These are the Inverter Fault Codes: Post_fault_hi: %d Post_fault_lo: %d Run_fault_hi: %d Run_fault_lo: %d\n", mc_fault_codes.get_post_fault_hi(), mc_fault_codes.get_post_fault_lo(), mc_fault_codes.get_run_fault_hi(), mc_fault_codes.get_run_fault_lo());
     Serial.printf("Accel implaus: %d Accel&Brake Implaus: %d Brake Implaus: %d\n", vcu_status.get_accel_implausability(), vcu_status.get_accel_brake_implausability(), vcu_status.get_brake_implausibility());
 #endif
+  }
+  }
+  else
+  {
+    if (update_sevensegment_timer.check())
+    {
+    if (display_enabled || seven_segment.begin())
+    {
+      seven_segment.begin();
+      seven_segment.clear();
+      seven_segment.writeDigitAscii(0, 'p');
+      seven_segment.writeDigitAscii(1, 'r');
+      seven_segment.writeDigitAscii(2, 'o');
+      seven_segment.writeDigitAscii(3, 'g');
+    }
+    seven_segment.writeDisplay();
+    }
   }
 }
 

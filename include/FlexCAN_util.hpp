@@ -7,6 +7,6 @@
 int WriteCAN(CAN_message_t &msg);
 int ReadCAN(CAN_message_t &msg);
 void init_can();
-void update_can();
+bool update_can();
 int unpack_flexcan_message(can_obj_ksu_ev_can_h_t *o, CAN_message_t &msg);
 #endif

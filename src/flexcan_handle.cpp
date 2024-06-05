@@ -66,8 +66,9 @@ return Inverter_CAN_.write(msg);
  * @brief
  *
  */
-void update_can()
+bool update_can()
 {
+    bool inv_rx = false;
     CAN_message_t rx_msg;
     if (ReadCAN(rx_msg))
     {
@@ -92,11 +93,13 @@ void update_can()
         }
         case (ID_MC_VOLTAGE_INFORMATION):
         {
+            inv_rx = true;
             mc_voltage_info.load(rx_msg.buf);
             break;
         }
         case (ID_MC_FAULT_CODES):
         {
+            inv_rx = true;
             mc_fault_codes.load(rx_msg.buf);
             break;
         }
@@ -152,4 +155,5 @@ void update_can()
             break;
         }
     }
+    return inv_rx;
 }
