@@ -1,12 +1,12 @@
-#ifndef some_points2.hpp
-#define some_points2 .hpp
+#pragma once
+#include <stdint.h>
 
 // Generated list of points
-const int num_points = 1501;
+uint32_t numberOfPoints = 1501;
 const struct Point {
-  int32 lat;
-  int32 lon;
-  uint16 prg;
+  int32_t lat;
+  int32_t lon;
+  uint16_t prg;
 } points[] = {
     {420671307, -842404300, 0},     {420671455, -842404271, 46},
     {420671610, -842404243, 93},    {420671767, -842404229, 141},
@@ -760,5 +760,3 @@ const struct Point {
     {420670806, -842404472, 65420}, {420670992, -842404419, 65478},
     {420671175, -842404378, 65535},
 };
-
-#endif // some_points2.hpp
